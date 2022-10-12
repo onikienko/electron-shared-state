@@ -26,8 +26,25 @@ export function createSharedStore<T>(state: T) {
   const isMain = process?.type === 'browser';
   const ipcModule = isMain ? ipcMain : ipcRenderer;
   const INTERNAL_CHANNEL = '@@ELECTRON_SHARED_STORE_IPC_CHANNEL';
+  const INTERNAL_CHANNEL_INIT = '@@ELECTRON_SHARED_STORE_IPC_CHANNEL_INIT';
 
   let isUpdating = false;
+
+  if (isRenderer) {
+    // during creation, we need to sync state in renderer with state in main (workaround for this issue - https://github.com/zoubingwu/electron-shared-state/issues/3 )
+    try {
+      const initState = (ipcModule as IpcRenderer).sendSync(
+        INTERNAL_CHANNEL_INIT
+      );
+      innerState = initState ? initState : innerState;
+    } catch (error) {}
+  }
+
+  if (isMain) {
+    ipcMain.on(INTERNAL_CHANNEL_INIT, (event) => {
+      event.returnValue = getState();
+    });
+  }
 
   ipcModule.on(
     INTERNAL_CHANNEL,
